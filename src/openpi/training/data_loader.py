@@ -136,15 +136,45 @@ def create_torch_dataset(
     if repo_id == "fake":
         return FakeDataset(model_config, num_samples=1024)
 
-    dataset_meta = lerobot_dataset.LeRobotDatasetMetadata(repo_id, root=data_config.root)
-    dataset = lerobot_dataset.LeRobotDataset(
-        repo_id=data_config.repo_id,
-        root=data_config.root,
-        delta_timestamps={
-            key: [t / dataset_meta.fps for t in range(action_horizon)] for key in data_config.action_sequence_keys
-        },
-    )
+    
+    
+    # single dataset with string as repo_id
+    if isinstance(data_config.repo_id, str):
+        dataset_meta = lerobot_dataset.LeRobotDatasetMetadata(repo_id, root=data_config.root)
+        dataset = lerobot_dataset.LeRobotDataset(
+            repo_id=data_config.repo_id,
+            root=data_config.root,
+            delta_timestamps={
+                key: [t / dataset_meta.fps for t in range(action_horizon)] for key in data_config.action_sequence_keys
+            },
+            tolerance_s=data_config.tolerance_s,
+        )
+    # multi dataset with list of repo_ids
+    elif isinstance(data_config.repo_id, list):
+        
+        # NOTE: only support the same fps across all datasets
+        dataset_meta = []
+        prev_fps = None
+        for repo_id in data_config.repo_id:
+            dataset_meta.append(lerobot_dataset.LeRobotDatasetMetadata(repo_id, root=data_config.root+'/'+repo_id))
+            if prev_fps is not None:
+                if dataset_meta[-1].fps != prev_fps:
+                    raise ValueError(f"FPS mismatch: {dataset_meta[-1].fps} != {prev_fps}")
+            prev_fps = dataset_meta[-1].fps
 
+        # multiple tolerances
+        tolerances_s = {key: data_config.tolerance_s for key in data_config.repo_id}
+        
+        dataset = lerobot_dataset.MultiLeRobotDataset(
+            repo_ids=data_config.repo_id,
+            root=data_config.root,
+            delta_timestamps={
+                key: [t / prev_fps for t in range(action_horizon)] for key in data_config.action_sequence_keys
+            },
+            tolerances_s=tolerances_s,
+        )
+    
+    # TODO: This is no long held for multi dataset
     if data_config.prompt_from_task:
         dataset = TransformedDataset(dataset, [_transforms.PromptFromLeRobotTask(dataset_meta.tasks)])
 

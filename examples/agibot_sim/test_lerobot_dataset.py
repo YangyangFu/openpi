@@ -8,7 +8,7 @@ ds = LeRobotDataset(
     #episodes=[0, 1, 2]
     )
 
-for i in range(10):
+for i in range(960):
     sample = ds[i]
     print(sample)
     print(f"Sample {i}:")

@@ -20,6 +20,7 @@ import openpi.models.tokenizer as _tokenizer
 import openpi.policies.aloha_policy as aloha_policy
 import openpi.policies.droid_policy as droid_policy
 import openpi.policies.libero_policy as libero_policy
+import openpi.policies.agibot_sim_policy as agibot_sim_policy
 import openpi.shared.download as _download
 import openpi.shared.normalize as _normalize
 import openpi.training.droid_rlds_dataset as droid_rlds_dataset
@@ -70,6 +71,9 @@ class DataConfig:
     # Contains precomputed normalization stats. If None, normalization will not be performed.
     norm_stats: dict[str, _transforms.NormStats] | None = None
 
+    # Tolerance second when querying video frames
+    tolerance_s: float = 0.0001
+    
     # Used to adopt the inputs from a dataset specific format to a common format
     # which is expected by the data transforms.
     repack_transforms: _transforms.Group = dataclasses.field(default_factory=_transforms.Group)
@@ -385,6 +389,88 @@ class RLDSDroidDataConfig(DataConfigFactory):
         )
 
 
+
+@dataclasses.dataclass(frozen=True)
+class LeRobotAgibotSimDataConfig(DataConfigFactory):
+    """
+    This config is used to configure transforms that are applied at various parts of the data pipeline.
+    For your own dataset, you can copy this class and modify the transforms to match your dataset based on the
+    comments below.
+    """
+    # Action keys that will be used to read the action sequence from the dataset.
+    action_sequence_keys: Sequence[str] = ("action",)
+    
+    # NOTE: given video needs large tolerance for querying frames
+    # Tolerance
+    tolerance_s: float = 0.2
+    
+
+    @override
+    def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
+        # The repack transform is *only* applied to the data coming from the dataset,
+        # and *not* during inference. We can use it to make inputs from the dataset look
+        # as close as possible to those coming from the inference environment (e.g. match the keys).
+        # Below, we match the keys in the dataset (which we defined in the data conversion script) to
+        # the keys we use in our inference pipeline (defined in the inference script for libero).
+        # For your own dataset, first figure out what keys your environment passes to the policy server
+        # and then modify the mappings below so your dataset's keys get matched to those target keys.
+        # The repack transform simply remaps key names here.
+        repack_transform = _transforms.Group(
+            inputs=[
+                _transforms.RepackTransform(
+                    {
+                        "observation.images.head_color": "observation.images.head_color",
+                        "observation.images.hand_left_color": "observation.images.hand_left_color",
+                        "observation.images.hand_right_color": "observation.images.hand_right_color",
+                        "observation.state": "observation.state",
+                        "actions": "action",
+                        "prompt": "subtask",
+                    }
+                )
+            ]
+        )
+
+        # The data transforms are applied to the data coming from the dataset *and* during inference.
+        # Below, we define the transforms for data going into the model (``inputs``) and the transforms
+        # for data coming out of the model (``outputs``) (the latter is only used during inference).
+        data_transforms = _transforms.Group(
+            inputs=[
+                agibot_sim_policy.AgibotSimInputs(action_dim=model_config.action_dim, model_type=model_config.model_type)
+                ],
+            outputs=[agibot_sim_policy.AgibotSimOutputs()],
+        )
+
+        # One additional data transform: pi0 models are trained on delta actions (relative to the first
+        # state in each action chunk). IF your data has ``absolute`` actions (e.g. target joint angles)
+        # you can uncomment the following line to convert the actions to delta actions. The only exception
+        # is for the gripper actions which are always absolute.
+        # In the example below, we would apply the delta conversion to the first 14 actions (joints) and
+        # leave the 15th and 16th action (gripper) unchanged, i.e. absolute.
+        delta_action_mask = _transforms.make_bool_mask(14, -2)
+        data_transforms = data_transforms.push(
+            inputs=[_transforms.DeltaActions(delta_action_mask)],
+            outputs=[_transforms.AbsoluteActions(delta_action_mask)],
+        )
+
+        # Image transforms, e.g., resize
+        # TODO: resizing seems applied as preprocessor in the model.py
+
+        
+        # Model transforms include things like tokenizing the prompt and action targets
+        # You do not need to change anything here for your own dataset.
+        model_transforms = ModelTransformFactory()(model_config)
+
+        # We return all data transforms for training and inference. No need to change anything here.
+        return dataclasses.replace(
+            self.create_base_config(assets_dirs),
+            repack_transforms=repack_transform,
+            data_transforms=data_transforms,
+            model_transforms=model_transforms,
+            action_sequence_keys=self.action_sequence_keys,
+            tolerance_s=self.tolerance_s,
+        )
+
+
 @dataclasses.dataclass(frozen=True)
 class TrainConfig:
     # Name of the config. Must be unique. Will be used to reference this config.
@@ -420,7 +506,7 @@ class TrainConfig:
     # Random seed that will be used by random generators during training.
     seed: int = 42
     # Global batch size.
-    batch_size: int = 4
+    batch_size: int = 16
     # Number of workers to use for the data loader. Increasing this number will speed up data loading but
     # will increase memory and CPU usage.
     num_workers: int = 16
@@ -707,6 +793,73 @@ _CONFIGS = [
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
     ),
+    #
+    # Agibot Sim Configs
+    #
+    # These train configs define the hyperparameters for fine-tuning the base model on your own dataset.
+    # They are used to define key elements like the dataset you are training on, the base checkpoint you
+    # are using, and other hyperparameters like how many training steps to run or what learning rate to use.
+    # For your own dataset, you can copy this class and modify the dataset name, and data transforms based on
+    # the comments below.
+    TrainConfig(
+        # Change the name to reflect your model and dataset.
+        name="pi0_agibot_sim",
+        # Here you define the model config -- In this example we use pi0 as the model
+        # architecture and perform *full* finetuning. in the examples below we show how to modify
+        # this to perform *low-memory* (LORA) finetuning and use pi0-FAST as an alternative architecture.
+        model=pi0.Pi0Config(
+            action_dim=16,
+            ),
+        # Here you define the dataset you are training on. In this example we use the Libero
+        # dataset. For your own dataset, you can change the repo_id to point to your dataset.
+        # Also modify the DataConfig to use the new config you made for your dataset above.
+        data=LeRobotAgibotSimDataConfig(
+            repo_id="bot-pi/agibot-simdata-sample",
+            base_config=DataConfig(
+                # This flag determines whether we load the prompt (i.e. the task instruction) from the
+                # ``task`` field in the LeRobot dataset. If set to True, the prompt will show up in
+                # a field called ``prompt`` in the input dict. The recommended setting is True.
+                prompt_from_task=True,
+            ),
+        ),
+        # Here you define which pre-trained checkpoint you want to load to initialize the model.
+        # This should match the model config you chose above -- i.e. in this case we use the pi0 base model.
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_base/params"),
+        # Below you can define other hyperparameters like the learning rate, number of training steps, etc.
+        # Check the base TrainConfig class for a full list of available hyperparameters.
+        num_train_steps=30_000,
+    ),
+    TrainConfig(
+        name="pi0_agibot_sim_lora",
+        # Here is an example of loading a pi0 model for LoRA fine-tuning.
+        model=pi0.Pi0Config(
+            action_dim=32,
+            paligemma_variant="gemma_2b_lora", 
+            action_expert_variant="gemma_300m_lora"
+        ),
+        data=LeRobotAgibotSimDataConfig(
+            repo_id=[
+                "bot-pi/agibot-sim-restock-supermarket-items", 
+                "bot-pi/agibot-sim-stamp-the-seal"
+            ],
+            root="dataset",
+            assets=AssetsConfig(
+                asset_id='bot-pi'
+            ),
+            base_config=DataConfig(prompt_from_task=False),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=30_000,
+        # The freeze filter defines which parameters should be frozen during training.
+        # We have a convenience function in the model config that returns the default freeze filter
+        # for the given model config for LoRA finetuning. Just make sure it matches the model config
+        # you chose above.
+        freeze_filter=pi0.Pi0Config(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+        ).get_freeze_filter(),
+        # Turn off EMA for LoRA finetuning.
+        ema_decay=None,
+    ), 
     #
     # Debugging configs.
     #

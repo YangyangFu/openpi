@@ -309,6 +309,38 @@ class PromptFromLeRobotTask(DataTransformFn):
 
         return {**data, "prompt": prompt}
 
+# TODOS:transforms for Agibot type data
+@dataclasses.dataclass(frozen=True)
+class SubtaskFromAgibotTask(DataTransformFn):
+    """Extracts a subtask from the current Agibot dataset task."""
+
+    pass 
+
+
+@dataclasses.dataclass(frozen=True)
+class PromptFromSubtask(DataTransformFn):
+    """Extracts a subtask from the current Agibot dataset task."""
+
+    pass 
+
+@dataclasses.dataclass(frozen=True)
+class RemoveStaticFrames(DataTransformFn):
+    """Removes static frames from the dataset.
+
+    Static frames are defined as frames where the state does not change.
+    """
+
+    pass 
+
+@dataclasses.dataclass(frozen=True)
+class SmoothActions(DataTransformFn):
+    """Smooths actions using a moving average filter.
+
+    The smoothing is applied to the actions in the dataset.
+    """
+
+    pass 
+
 
 def flatten_dict(tree: at.PyTree) -> dict:
     """Flatten a nested dictionary. Uses '/' as the separator."""
