@@ -506,10 +506,10 @@ class TrainConfig:
     # Random seed that will be used by random generators during training.
     seed: int = 42
     # Global batch size.
-    batch_size: int = 16
+    batch_size: int = 32
     # Number of workers to use for the data loader. Increasing this number will speed up data loading but
     # will increase memory and CPU usage.
-    num_workers: int = 16
+    num_workers: int = 20
     # Number of train steps (batches) to run.
     num_train_steps: int = 30_000
 
@@ -805,21 +805,32 @@ _CONFIGS = [
         # Change the name to reflect your model and dataset.
         name="pi0_agibot_sim",
         # Here you define the model config -- In this example we use pi0 as the model
-        # architecture and perform *full* finetuning. in the examples below we show how to modify
-        # this to perform *low-memory* (LORA) finetuning and use pi0-FAST as an alternative architecture.
+        # architecture and perform *full* finetuning. 
         model=pi0.Pi0Config(
-            action_dim=16,
+            action_dim=32,
             ),
         # Here you define the dataset you are training on. In this example we use the Libero
         # dataset. For your own dataset, you can change the repo_id to point to your dataset.
         # Also modify the DataConfig to use the new config you made for your dataset above.
         data=LeRobotAgibotSimDataConfig(
-            repo_id="bot-pi/agibot-simdata-sample",
+            repo_id=[
+                "bot-pi/agibot-sim-clear-table-in-the-restaurant",
+                "bot-pi/agibot-sim-clear-the-countertop-waste",
+                "bot-pi/agibot-sim-heat-the-food-in-the-microwave",
+                "bot-pi/agibot-sim-make-a-sandwich",
+                "bot-pi/agibot-sim-open-drawer-and-store-items",
+                "bot-pi/agibot-sim-pack-in-the-supermarket",
+                "bot-pi/agibot-sim-pack-moving-objects-from-conveyor",
+                "bot-pi/agibot-sim-pickup-items-from-the-freezer",
+                "bot-pi/agibot-sim-restock-supermarket-items", 
+                "bot-pi/agibot-sim-stamp-the-seal"
+            ],
+            root=None,
             base_config=DataConfig(
                 # This flag determines whether we load the prompt (i.e. the task instruction) from the
                 # ``task`` field in the LeRobot dataset. If set to True, the prompt will show up in
-                # a field called ``prompt`` in the input dict. The recommended setting is True.
-                prompt_from_task=True,
+                # a field called ``prompt`` in the input dict. 
+                prompt_from_task=False,
             ),
         ),
         # Here you define which pre-trained checkpoint you want to load to initialize the model.
@@ -839,10 +850,18 @@ _CONFIGS = [
         ),
         data=LeRobotAgibotSimDataConfig(
             repo_id=[
+                "bot-pi/agibot-sim-clear-table-in-the-restaurant",
+                "bot-pi/agibot-sim-clear-the-countertop-waste",
+                "bot-pi/agibot-sim-heat-the-food-in-the-microwave",
+                "bot-pi/agibot-sim-make-a-sandwich",
+                "bot-pi/agibot-sim-open-drawer-and-store-items",
+                "bot-pi/agibot-sim-pack-in-the-supermarket",
+                "bot-pi/agibot-sim-pack-moving-objects-from-conveyor",
+                "bot-pi/agibot-sim-pickup-items-from-the-freezer",
                 "bot-pi/agibot-sim-restock-supermarket-items", 
                 "bot-pi/agibot-sim-stamp-the-seal"
             ],
-            root="dataset",
+            root=None,
             assets=AssetsConfig(
                 asset_id='bot-pi'
             ),
