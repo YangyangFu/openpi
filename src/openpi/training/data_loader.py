@@ -14,6 +14,7 @@ import openpi.models.model as _model
 import openpi.training.config as _config
 from openpi.training.droid_rlds_dataset import DroidRldsDataset
 import openpi.transforms as _transforms
+from openpi.training.dataset import MultiLeRobotDataset
 
 T_co = TypeVar("T_co", covariant=True)
 
@@ -156,7 +157,8 @@ def create_torch_dataset(
         dataset_meta = []
         prev_fps = None
         for repo_id in data_config.repo_id:
-            dataset_meta.append(lerobot_dataset.LeRobotDatasetMetadata(repo_id, root=data_config.root+'/'+repo_id))
+            root = data_config.root + '/' + repo_id if data_config.root is not None else None
+            dataset_meta.append(lerobot_dataset.LeRobotDatasetMetadata(repo_id, root=root))
             if prev_fps is not None:
                 if dataset_meta[-1].fps != prev_fps:
                     raise ValueError(f"FPS mismatch: {dataset_meta[-1].fps} != {prev_fps}")
@@ -165,7 +167,7 @@ def create_torch_dataset(
         # multiple tolerances
         tolerances_s = {key: data_config.tolerance_s for key in data_config.repo_id}
         
-        dataset = lerobot_dataset.MultiLeRobotDataset(
+        dataset = MultiLeRobotDataset(
             repo_ids=data_config.repo_id,
             root=data_config.root,
             delta_timestamps={
