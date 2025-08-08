@@ -1,0 +1,1 @@
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.98 uv run scripts/train.py pi0_agibot_sim --exp-name=pi0-full-finetune --overwrite
