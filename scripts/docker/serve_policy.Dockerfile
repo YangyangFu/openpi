@@ -13,7 +13,21 @@ COPY --from=ghcr.io/astral-sh/uv:0.5.1 /uv /uvx /bin/
 WORKDIR /app
 
 # Needed because LeRobot uses git-lfs.
-RUN apt-get update && apt-get install -y git git-lfs linux-headers-generic build-essential clang
+# Install OpenGL libraries for OpenCV
+RUN apt-get update && apt-get install -y \
+    git \
+    git-lfs \
+    linux-headers-generic \
+    build-essential \
+    clang \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy from the cache instead of linking since it's a mounted volume
 ENV UV_LINK_MODE=copy

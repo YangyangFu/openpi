@@ -1,1 +1,0 @@
-XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi0_agibot_sim_lora --exp-name=pi0-lora --resume
