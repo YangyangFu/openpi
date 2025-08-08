@@ -826,6 +826,9 @@ _CONFIGS = [
                 "bot-pi/agibot-sim-stamp-the-seal"
             ],
             root=None,
+            assets=AssetsConfig(
+                asset_id='bot-pi'
+            ),
             base_config=DataConfig(
                 # This flag determines whether we load the prompt (i.e. the task instruction) from the
                 # ``task`` field in the LeRobot dataset. If set to True, the prompt will show up in
@@ -838,7 +841,7 @@ _CONFIGS = [
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_base/params"),
         # Below you can define other hyperparameters like the learning rate, number of training steps, etc.
         # Check the base TrainConfig class for a full list of available hyperparameters.
-        num_train_steps=30_000,
+        num_train_steps=30_000_000,
     ),
     TrainConfig(
         name="pi0_agibot_sim_lora",
